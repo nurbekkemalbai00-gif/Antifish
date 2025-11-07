@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Анти-Мошенник — ИИ Самоучка (без БД)</title>
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <style>
+    :root{
+      --bg:#f3f6fb; --card:#fff; --accent:#1f2937; --muted:#6b7280; --primary:#1e40af;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter, "Segoe UI", Roboto, Arial; background:var(--bg); color:#111;}
+    header{background:linear-gradient(90deg,#0f172a 0%, #111827 100%); color:#fff; padding:24px 20px; text-align:center}
+    header h1{margin:0;font-size:20px}
+    header p{margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:13px}
+    .container{max-width:1000px;margin:22px auto;padding:0 16px;}
+    .grid{display:grid;grid-template-columns:1fr 340px;gap:18px}
+    .card{background:var(--card);border-radius:12px;padding:16px;box-shadow:0 6px 18px rgba(15,23,42,0.06);}
+    .full{grid-column:1 / -1}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    input[type="text"], textarea, select{
+      width:100%;padding:10px;border:1px solid #e6e9ef;border-radius:8px;font-size:14px;
+    }
+    textarea{min-height:120px;resize:vertical}
+    .row{display:flex;gap:10px;align-items:center}
+    button{
+      background:var(--primary);color:#fff;border:none;padding:10px 14px;border-radius:8px;cursor:pointer;
+      font-weight:600;font-size:14px;
+    }
+    button.ghost{background:transparent;border:1px solid #e6e9ef;color:var(--accent)}
+    .result{margin-top:12px;padding:12px;border-radius:8px;background:#f8fafc;border-left:4px solid var(--primary)}
+    .news-list article{padding:12px 0;border-bottom:1px dashed #eef2ff}
+    .muted{color:var(--muted);font-size:13px}
+    .small{font-size:13px}
+    .tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef2ff;color:var(--primary);font-size:12px;margin-right:6px}
+    .history-item{padding:10px;border:1px solid #eef2ff;border-radius:8px;margin-bottom:8px;background:#fff}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    .flex{display:flex;gap:8px;align-items:center}
+    footer{text-align:center;padding:18px;color:var(--muted);font-size:13px;margin-top:22px}
+    @media (max-width:900px){ .grid{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🛡️ Анти-Мошенник — ИИ Самоучка (без БД)</h1>
+  <p>Всё хранится в браузере (localStorage). Позже можно экспортировать и загрузить на сервер.</p>
+</header>
+
+<div class="container">
+  <div class="grid">
+    <!-- LEFT: Analyzer + News -->
+    <div class="card">
+      <h2 style="margin:0 0 8px 0">Проверка сообщения / ссылки</h2>
+      <div class="muted small">Вставь отправителя, текст или ссылку и нажми «Проверить».</div>
+
+      <div style="margin-top:12px">
+        <label>Отправитель / ссылка</label>
+        <input id="inpSender" type="text" placeholder="example@site.com или https://site.com">
+      </div>
+
+      <div style="margin-top:10px">
+        <label>Текст сообщения</label>
+        <textarea id="inpText" placeholder="Текст письма, SMS или описание..."></textarea>
+      </div>
+
+      <div style="margin-top:12px" class="row">
+        <button id="btnAnalyze">Проверить</button>
+        <button id="btnClear" class="ghost">Очистить</button>
+        <button id="btnAI" class="ghost">ИИ анализ</button>
+
+        <div style="margin-left:auto" class="muted small" id="analyzeTime">—</div>
+      </div>
+
+      <div id="resultBox" class="result" style="display:none"></div>
+
+      <div style="margin-top:12px" class="controls">
+        <button id="btnMarkPhishing" class="ghost">Пометить: мошенничество</button>
+        <button id="btnMarkLegit" class="ghost">Пометить: безопасно</button>
+        <button id="btnExport" class="ghost">Экспортировать примеры</button>
+        <input id="fileImport" type="file" accept=".json" style="display:none">
+        <button id="btnImport" class="ghost">Импортировать примеры</button>
+        <button id="btnClearStorage" class="ghost">Очистить локальные данные</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: Dashboard / Trainer -->
+    <div class="card">
+      <h3 style="margin:0 0 8px 0">ИИ — Самообучение (локально)</h3>
+      <div class="muted small">Здесь хранятся примеры, которые вы пометили. Данные находятся в вашем браузере.</div>
+
+      <div style="margin-top:10px" id="stats" class="small">
+        <div>Всего примеров: <strong id="statCount">0</strong></div>
+        <div>Мошенничество: <strong id="statPhish">0</strong></div>
+        <div>Безопасно: <strong id="statLegit">0</strong></div>
+      </div>
+
+      <div style="margin-top:12px;max-height:420px;overflow:auto" id="historyList"></div>
+    </div>
+
+    <!-- FULL: News -->
+    <div class="card full">
+      <h3 style="margin:0 0 8px 0">Новости безопасности (примеры)</h3>
+      <div class="muted small">Пока что статичные статьи. Позже подключим RSS/API.</div>
+
+      <div class="news-list" style="margin-top:12px">
+        <article>
+          <div class="tag">CISA</div>
+          <h4 style="margin:6px 0">Новая волна фишинга через QR-коды</h4>
+          <div class="muted small">Злоумышленники рассылают QR-коды, перенаправляющие на фальшивые страницы входа.</div>
+        </article>
+
+        <article>
+          <div class="tag">Krebs</div>
+          <h4 style="margin:6px 0">Поддельные уведомления от банков</h4>
+          <div class="muted small">Распространённый сценарий: сообщение о блокировке счёта с просьбой ввести данные.</div>
+        </article>
+
+        <article>
+          <div class="tag">NCSC</div>
+          <h4 style="margin:6px 0">Как распознать фишинговое письмо</h4>
+          <div class="muted small">Советы: проверьте домен отправителя, не вводите пароли по ссылке, используйте 2FA.</div>
+        </article>
+      </div>
+    </div>
+
+  </div> <!-- grid -->
+</div> <!-- container -->
+
+<footer>
+  © 2025 Анти-Мошенник — Прототип. Данные хранятся локально (localStorage). Экспорт/импорт доступны.
+</footer>
+
+<script>
+/*
+  Клиентская логика:
+  - анализ (heuristics + простой скор)
+  - хранение пометок в localStorage под ключом "antiphish_examples"
+  - экспорт/импорт JSON
+  - нет бэкенда / нет БД
+*/
+
+// -------------------- Helpers --------------------
+function nowIso(){ return new Date().toISOString(); }
+function uid(){ return 'ex_' + Math.random().toString(36).slice(2,9); }
+function saveExamples(list){ localStorage.setItem('antiphish_examples', JSON.stringify(list)); }
+function loadExamples(){ try{ return JSON.parse(localStorage.getItem('antiphish_examples')||'[]') }catch(e){ return [] } }
+
+// -------------------- Analysis --------------------
+function analyzeText(sender, text){
+  const s = (sender||'').trim().toLowerCase();
+  const t = (text||'').trim().toLowerCase();
+  let score = 0;
+  const reasons = [];
+
+  // sender checks
+  if(s && !s.includes('@') && s.startsWith('http')){ score += 15; reasons.push('Отправитель — ссылка/не email'); }
+  if(s && s.includes('@') && s.split('@')[1] && s.split('@')[1].split('.').length === 1){
+    score += 12; reasons.push('Подозрительный домен отправителя');
+  }
+  // common phishing triggers
+  const triggers = ['срочно','немедленно','пароль','введите данные','обновите','указанные данные','наличие штрафа','блокировк','заблокирован'];
+  triggers.forEach(tr=>{
+    if(t.includes(tr)){ score += 18; reasons.push('Найдён триггер: "'+tr+'"'); }
+  });
+  // URLs in text
+  const urlRegex = /https?:\/\/[^\s/$.?#].[^\s]*/gi;
+  const urls = (t.match(urlRegex) || []).slice(0,5);
+  if(urls.length) {
+    score += Math.min(30, urls.length * 12);
+    reasons.push('Найдена ссылка(и): ' + urls.join(', '));
+  }
+  // short message + urgent word -> increase
+  if(t.length < 80 && (t.includes('срочно') || t.includes('немедленно'))) { score += 10; reasons.push('Короткое сообщение с призывом к действию'); }
+
+  // clamp score
+  score = Math.min(100, Math.max(0, score));
+
+  // suggestions
+  const suggestions = [];
+  suggestions.push('Не переходите по ссылкам без проверки домена.');
+  suggestions.push('Проверьте отправителя и заголовки письма (если доступно).');
+  suggestions.push('Не вводите пароли/Коды 2FA из писем/сообщений.');
+
+  return {score, reasons, suggestions, urls};
+}
+
+// -------------------- UI --------------------
+const inpSender = document.getElementById('inpSender');
+const inpText = document.getElementById('inpText');
+const btnAnalyze = document.getElementById('btnAnalyze');
+const btnClear = document.getElementById('btnClear');
+const resultBox = document.getElementById('resultBox');
+const analyzeTime = document.getElementById('analyzeTime');
+
+const btnMarkPhishing = document.getElementById('btnMarkPhishing');
+const btnMarkLegit = document.getElementById('btnMarkLegit');
+const historyList = document.getElementById('historyList');
+const statCount = document.getElementById('statCount');
+const statPhish = document.getElementById('statPhish');
+const statLegit = document.getElementById('statLegit');
+
+const btnExport = document.getElementById('btnExport');
+const btnImport = document.getElementById('btnImport');
+const fileImport = document.getElementById('fileImport');
+const btnClearStorage = document.getElementById('btnClearStorage');
+
+let lastAnalysis = null;
+
+function renderResult(res){
+  if(!res){ resultBox.style.display='none'; return; }
+  let html = `<div style="font-weight:700;margin-bottom:6px">Риск фишинга: ${res.score}%</div>`;
+  if(res.reasons && res.reasons.length){
+    html += '<div class="small muted"><strong>Почему:</strong></div><ul>';
+    res.reasons.forEach(r => html += `<li style="margin:4px 0">${r}</li>`);
+    html += '</ul>';
+  }
+  html += '<div class="small muted" style="margin-top:8px"><strong>Рекомендации:</strong></div><ul>';
+  res.suggestions.forEach(s => html += `<li style="margin:4px 0">${s}</li>`);
+  html += '</ul>';
+  if(res.urls && res.urls.length){
+    html += `<div style="margin-top:8px" class="small muted">Ссылки: ${res.urls.join(', ')}</div>`;
+  }
+  resultBox.innerHTML = html;
+  resultBox.style.display = 'block';
+}
+
+// Analyze button
+btnAnalyze.addEventListener('click', ()=>{
+  const s = inpSender.value;
+  const t = inpText.value;
+  const t0 = performance.now();
+  const res = analyzeText(s,t);
+  const t1 = performance.now();
+  analyzeTime.textContent = `Время: ${(t1-t0).toFixed(1)} ms`;
+  renderResult(res);
+  lastAnalysis = {sender:s, text:t, analysis:res, time: nowIso()};
+});
+
+// Clear button
+btnClear.addEventListener('click', ()=>{
+  inpSender.value=''; inpText.value=''; renderResult(null); analyzeTime.textContent='—'; lastAnalysis = null;
+});
+
+// Marking (save example)
+function addExample(label){
+  // label: 'phishing' | 'legit'
+  const examples = loadExamples();
+  const example = {
+    id: uid(),
+    label,
+    sender: inpSender.value,
+    text: inpText.value,
+    analysis: lastAnalysis ? lastAnalysis.analysis : analyzeText(inpSender.value, inpText.value),
+    created: nowIso()
+  };
+  examples.unshift(example);
+  saveExamples(examples);
+  renderHistory();
+  alert('Пример сохранён локально: ' + label);
+}
+
+btnMarkPhishing.addEventListener('click', ()=> addExample('phishing'));
+btnMarkLegit.addEventListener('click', ()=> addExample('legit'));
+
+// History & stats
+function renderHistory(){
+  const examples = loadExamples();
+  statCount.textContent = examples.length;
+  statPhish.textContent = examples.filter(e=>e.label==='phishing').length;
+  statLegit.textContent = examples.filter(e=>e.label==='legit').length;
+
+  historyList.innerHTML = '';
+  if(examples.length === 0){
+    historyList.innerHTML = '<div class="muted small">Нет сохранённых примеров. Пометьте сообщение как мошенничество или безопасное.</div>';
+    return;
+  }
+  examples.forEach(ex=>{
+    const el = document.createElement('div');
+    el.className = 'history-item';
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+        <div style="font-weight:600">${ex.label==='phishing' ? '🚩 Мошенничество' : '✅ Безопасно'}</div>
+        <div class="muted small">${(new Date(ex.created)).toLocaleString()}</div>
+      </div>
+      <div class="muted small" style="margin-top:6px"><strong>Отправитель:</strong> ${ex.sender || '(не указан)'}</div>
+      <div style="margin-top:8px">${ex.text ? `<pre style="white-space:pre-wrap;font-family:inherit">${escapeHtml(ex.text)}</pre>` : '<div class="muted small">(без текста)</div>'}</div>
+      <div style="margin-top:8px" class="small muted"><strong>Анализ:</strong> Риск ${ex.analysis.score}% — ${ex.analysis.reasons.slice(0,2).join('; ')}</div>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <button class="ghost" onclick="deleteExample('${ex.id}')">Удалить</button>
+        <button class="ghost" onclick="copyExample('${ex.id}')">Копировать JSON</button>
+      </div>
+    `;
+    historyList.appendChild(el);
+  });
+}
+
+// escape HTML for safe display
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+// delete example
+window.deleteExample = function(id){
+  const arr = loadExamples().filter(x=>x.id!==id);
+  saveExamples(arr);
+  renderHistory();
+}
+
+// copy JSON of a single example
+window.copyExample = function(id){
+  const ex = loadExamples().find(x=>x.id===id);
+  if(!ex) return alert('Не найдено');
+  navigator.clipboard.writeText(JSON.stringify(ex, null, 2)).then(()=>alert('Скопировано в буфер обмена'));
+}
+
+// export all examples
+btnExport.addEventListener('click', ()=>{
+  const data = loadExamples();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'antiphish_examples.json';
+  document.body.appendChild(a); a.click();
+  a.remove(); URL.revokeObjectURL(url);
+});
+
+// import examples (merge)
+btnImport.addEventListener('click', ()=> fileImport.click());
+fileImport.addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = function(){ 
+    try{
+      const imported = JSON.parse(reader.result);
+      if(!Array.isArray(imported)) throw new Error('JSON должен быть массивом примеров');
+      const existing = loadExamples();
+      // add imported with new ids if duplicates
+      imported.forEach(it=>{
+        if(!it.id) it.id = uid();
+        existing.unshift(it);
+      });
+      saveExamples(existing);
+      renderHistory();
+      alert('Импортировано: ' + imported.length);
+    }catch(err){
+      alert('Ошибка при импорте: ' + err.message);
+    }
+  };
+  reader.readAsText(f);
+});
+
+// clear storage
+btnClearStorage.addEventListener('click', ()=>{
+  if(confirm('Удалить все сохранённые примеры из локального хранилища?')) {
+    localStorage.removeItem('antiphish_examples');
+    renderHistory();
+  }
+});
+
+// load on start
+renderHistory();
+
+// simple UX: press Ctrl+Enter in textarea triggers analyze
+inpText.addEventListener('keydown', (e)=>{
+  if(e.ctrlKey && e.key === 'Enter'){ btnAnalyze.click(); }
+});
+
+</script>
+
+<script>
+  // -------------------- AI Integration (robust) --------------------
+(function(){
+  // ensure required DOM nodes exist
+  const analyzeWrapper = document.querySelector('.row') || document.body;
+  let btnAI = document.getElementById('btnAI');
+
+  // If btnAI missing — create it next to Analyze button
+  if (!btnAI) {
+    btnAI = document.createElement('button');
+    btnAI.id = 'btnAI';
+    btnAI.className = 'ghost';
+    btnAI.textContent = 'ИИ анализ';
+    // try to insert after Analyze button
+    const analyzeBtn = document.getElementById('btnAnalyze');
+    if (analyzeBtn && analyzeBtn.parentNode) {
+      analyzeBtn.parentNode.insertBefore(btnAI, analyzeBtn.nextSibling);
+    } else {
+      analyzeWrapper.appendChild(btnAI);
+    }
+  }
+
+  // helper to display raw debug info
+  function showRaw(data) {
+    const pre = document.createElement('pre');
+    pre.style.whiteSpace = 'pre-wrap';
+    pre.style.fontSize = '12px';
+    pre.style.marginTop = '10px';
+    pre.textContent = JSON.stringify(data, null, 2);
+    // append but avoid duplicates
+    const existing = document.getElementById('rawAIResp');
+    if (existing) existing.remove();
+    pre.id = 'rawAIResp';
+    resultBox.appendChild(pre);
+  }
+
+  btnAI.addEventListener('click', async () => {
+    const text = inpText.value.trim();
+    if (!text) return alert('Введите текст сообщения для анализа.');
+
+    resultBox.style.display = 'block';
+    resultBox.innerHTML = '🤖 ИИ анализирует сообщение...';
+
+    try {
+      const res = await fetch('/api/classify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+
+      // network errors
+      if (!res.ok) {
+        const txt = await res.text().catch(()=>'<не удалось прочитать тело ответа>');
+        throw new Error(`HTTP ${res.status}: ${txt}`);
+      }
+
+      // try parse json
+      let data;
+      try { data = await res.json(); } 
+      catch (e) { 
+        const txt = await res.text();
+        throw new Error('Ответ не JSON: ' + txt);
+      }
+
+      // show raw data for debugging
+      resultBox.innerHTML = '<div style="font-weight:700;margin-bottom:6px">Ответ от ИИ (сырые данные)</div>';
+      showRaw(data);
+
+      // normalize various possible server responses:
+      // - uClassify JSON REST: an array [{ classification: [...] , text: "..." }]
+      // - server returned data[0] already: { classification: [...] }
+      // - other shapes
+      let cls = null;
+      if (Array.isArray(data) && data.length > 0 && data[0].classification) cls = data[0].classification;
+      else if (data.classification) cls = data.classification;
+      else if (data && data[0] && data[0].classification) cls = data[0].classification;
+
+      if (!cls) {
+        resultBox.insertAdjacentHTML('beforeend', '<div style="color:orange;margin-top:8px">Не найдено поле <code>classification</code> в ответе ИИ.</div>');
+        return;
+      }
+
+      // find phishing/legit probabilities (case-insensitive)
+      const getP = (name) => {
+        const found = cls.find(c => String(c.className).toLowerCase().includes(name));
+        return found ? (found.p ?? found.probability ?? found.score ?? 0) : 0;
+      };
+
+      const phishing = getP('phish');
+      const legit = getP('legit') || getP('safe') || (1 - phishing);
+
+      const confidence = Math.max(phishing, legit) * 100;
+      const verdict = phishing > legit ? '⚠️ Обнаружено мошенничество' : '✅ Похоже безопасно';
+      const color = phishing > legit ? 'red' : 'green';
+
+      // append verdict
+      const verdictHtml = `
+        <div style="font-weight:700;margin-top:10px;color:${color}">${verdict}</div>
+        <div class="small muted">Уверенность ИИ: ${confidence.toFixed(1)}%</div>
+        <div style="margin-top:8px" class="small muted">Источник: uClassify (через ваш сервер)</div>
+      `;
+      resultBox.insertAdjacentHTML('beforeend', verdictHtml);
+
+    } catch (err) {
+      console.error('AI error:', err);
+      resultBox.innerHTML = `<span style="color:red">Ошибка связи с ИИ: ${err.message}</span>`;
+    }
+  });
+})();
+
+</script>
+
+</body>
+</html>
